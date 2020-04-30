@@ -1,0 +1,187 @@
+---
+title: "ch 6 ec hw"
+author: "Zoe Robino"
+date: "4/29/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.align = "center", comment = NA, options(scipen=999))
+library(tidyverse)
+library(knitr)
+library(dplyr)
+library(moderndive)
+library(ggplot2)
+
+library(ISLR)
+library(skimr)
+library(plotly)
+library(caret)
+```
+
+# Question 9 from Chapter 6
+
+#### a. split the data set into a training set and test set
+
+```{r, echo=FALSE}
+library(ISLR)
+attach(College)
+set.seed(17)
+
+trainset <- createDataPartition(College$Apps, p = 0.60, list = FALSE)
+
+train <- College[trainset,]
+test <- College[-trainset,]
+
+```
+
+
+#### b. Fit a linear model using least squares on the training set and report the test error obtained
+
+```{r}
+ls.train<-lm(Apps~.,data=train)
+summary(ls.train)
+```
+
+```{r}
+set.seed(12)
+predicted.app<-predict(ls.train,test)
+testerror<-mean((test$Apps-predicted.app)^2)
+testerror
+```
+
+The mean squared error is 1,686,350.
+
+#### c. Fit a ridge regression model on the training set, with $\lambda$ chosen by cross validation
+
+```{r}
+set.seed(12)
+library(Matrix)
+train.m<-model.matrix(Apps~.,data=train)
+test.m<-model.matrix(Apps~.,data=test)
+
+
+
+grid<-10^seq(4,-2,length=100)
+
+library(glmnet)
+ridge<-glmnet(train.m,train$Apps,alpha=0,lambda=grid,thresh = 1e-12)
+
+
+cv.ridge<-cv.glmnet(train.m,train$Apps,alpha=0,lambda=grid,thresh=1e-12)
+
+
+ridgebestlam<-cv.ridge$lambda.min
+ridgebestlam
+```
+18.7381 is the $\lamba$ selected by the cross validation
+
+```{r}
+set.seed(12)
+pred.ridge<-predict(ridge,s=ridgebestlam,newx =test.m)
+
+mean((test$Apps-pred.ridge)^2)
+```
+
+The mean squared error of the ridge regression model is 1,801,548, which is greater than the ridge regression MSE.
+
+#### d. Fit a lasso model on the training set, with $\lambda$ chosen by cross validation.Report the test error obtained, along with the number of non-zero coefficient estimates.
+
+```{r}
+set.seed(12)
+lasso<-glmnet(train.m,train$Apps,alpha=1,lambda=grid,thresh = 1e-12)
+
+
+cv.lasso<-cv.glmnet(train.m,train$Apps,alpha=1,lambda=grid,thresh=1e-12)
+
+bestlam.lasso<-cv.lasso$lambda.min
+bestlam.lasso
+```
+
+The best $\lamba$ for the lasso approach is  8.111308.
+
+```{r}
+set.seed(12)
+pred.lasso<-predict(lasso,s=bestlam.lasso,newx =test.m)
+
+mean((test$Apps-pred.lasso)^2)
+```
+
+
+The mean squared error of the ridge regression model is 1,752,768, which is less than the ridge model's but greater than the linear model's.
+
+```{r}
+predict(lasso,s=bestlam.lasso,type="coefficients")
+```
+
+There are 8 non-zero coefficients
+
+### e. Fit a PCR model on the training set, with M chosen by crossvalidation. Report the test error obtained, along with the value of M selected by cross-validation.
+
+
+```{r}
+library(pls)
+pcrmodel<-pcr(Apps~.,data=train,scale=TRUE,validation="CV")
+
+validationplot(pcrmodel,val.type="MSEP")
+```
+
+Based on this graph, the best M is 17.
+
+```{r}
+set.seed(12)
+predict.pcr<-predict(pcrmodel,test,ncomp=17)
+mean((test$Apps-predict.pcr)^2)
+```
+
+The mean squared error is 1,207,056. This is the lowest comparatively so far with M=17.
+
+
+####. f. Fit a PLS model on the training set, with M chosen by crossvalidation. Report the test error obtained, along with the value of M selected by cross-validation.
+
+```{r}
+plsrmodel<-plsr(Apps~.,data=train,scale=TRUE,validation="CV")
+
+validationplot(plsrmodel,val.type="MSEP")
+```
+
+M=10 in this case.
+
+```{r}
+predict.plsr<-predict(plsrmodel,test,ncomp=10)
+mean((test$Apps-predict.plsr)^2)
+```
+
+In this model, the MSE is 1,712,437 which is neither the highest nor the lowest. 
+
+#### g. Comment on the results obtained. How accurately can we predict the number of college applications received? Is there much difference among the test errors resulting from these five approaches?
+
+```{r}
+test.avg <- mean(test$Apps)
+lm.r2 <- 1 - mean((predicted.app - test$Apps)^2) / mean((test.avg - test$Apps)^2)
+#Ridge model
+ridge.r2 <- 1 - mean((pred.ridge - test$Apps)^2) / mean((test.avg - test$Apps)^2)
+#Lasso model
+lasso.r2 <- 1 - mean((pred.lasso - test$Apps)^2) / mean((test.avg - test$Apps)^2)
+#PCR model
+pcr.r2 <- 1 - mean((predict.pcr - test$Apps)^2) / mean((test.avg - test$Apps)^2)
+#PLS model
+pls.r2 <- 1 - mean((predict.plsr - test$Apps)^2) / mean((test.avg - test$Apps)^2)
+```
+
+```{r}
+lm.r2
+ridge.r2
+lasso.r2
+pcr.r2
+pls.r2
+
+```
+
+The r-squared for the linear regression model is  0.9135277
+The r-squared for the ridge model is  0.9076206
+The r-squared for the lasso model is  0.9101219
+The r-squared for the pcr model is  0.7913099
+The r-squared for the pls model is  0.91219
+
+All of the models are fairly good fits at about .90-.91 as the r-squared with the pls model being the best. The PCR model, however, is .79, which is much worse than the others. 
